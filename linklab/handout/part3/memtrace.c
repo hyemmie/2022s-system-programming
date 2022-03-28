@@ -31,6 +31,104 @@ static unsigned long n_allocb  = 0;
 static unsigned long n_freeb   = 0;
 static item *list = NULL;
 
+
+void *malloc(size_t size) 
+{
+  char *error;
+  void *ptr;
+  
+    if(!mallocp) {
+      mallocp = dlsym(RTLD_NEXT, "malloc");
+      if((error = dlerror()) != NULL) {     
+        fputs(error, stderr);
+        exit(1);
+      }
+    }
+    ptr = mallocp(size);
+    n_malloc += 1;
+    n_allocb += size;
+    alloc(list, ptr, size);
+    LOG_MALLOC(size, ptr);
+    return ptr;
+}
+
+void *calloc(size_t nmemb, size_t size) 
+{
+  char* error;
+  void *ptr;
+  
+  if(!callocp) {
+    callocp = dlsym(RTLD_NEXT, "calloc");
+    if((error = dlerror()) != NULL) {
+      fputs(error, stderr);
+      exit(1);
+    }
+  }
+  ptr = callocp(nmemb, size);
+  n_calloc += 1;
+  n_allocb += nmemb * size;
+  alloc(list, ptr, nmemb*size);
+  LOG_CALLOC(nmemb, size, ptr);
+  return ptr;
+}
+
+void *realloc(void *ptr, size_t size) {
+  char *error;
+  void *new_ptr;
+
+  if(!reallocp) {  
+    reallocp = dlsym(RTLD_NEXT, "realloc");
+    if((error = dlerror()) != NULL) {
+      fputs(error, stderr);
+      exit(1);
+    } 
+  }
+
+  n_realloc += 1;
+  n_allocb += size;
+  
+  item *prev = find(list, ptr);
+  if (prev == NULL) {
+    LOG_ILL_FREE();
+    return realloc(NULL, size);
+  } else if (prev->cnt <= 0) {
+    LOG_DOUBLE_FREE();
+    return realloc(NULL, size);
+  } else {
+    new_ptr = reallocp(ptr, size);
+    LOG_REALLOC(ptr, size, new_ptr);
+    n_freeb += prev->size;
+    dealloc(list, ptr);
+    alloc(list, new_ptr, size);     
+    return new_ptr;
+  }
+}
+
+void free(void *ptr) {
+  char* error; 
+  
+  if(!freep) {
+    freep = dlsym(RTLD_NEXT, "free");
+    if ((error = dlerror()) != NULL) { 
+      fputs(error, stderr);
+      exit(1);
+    }
+  }
+  LOG_FREE(ptr);
+
+  item *curr = find(list, ptr);
+
+  if (ptr == NULL || curr == NULL) {
+    LOG_ILL_FREE();
+  } else if (curr->cnt <= 0) {
+    LOG_DOUBLE_FREE();
+  } else {
+    n_freeb += curr->size;
+    dealloc(list, ptr);
+    freep(ptr);
+  }
+}
+
 //
 // init - this function is called once when the shared library is loaded
 //
@@ -55,8 +153,24 @@ __attribute__((destructor))
 void fini(void)
 {
   // ...
+  static unsigned long avg = 0;
+  if((n_malloc + n_calloc + n_realloc) != 0) 
+    avg = n_allocb/(unsigned long)(n_malloc + n_calloc + n_realloc);
 
-  LOG_STATISTICS(0L, 0L, 0L);
+  LOG_STATISTICS(n_allocb, avg, n_freeb); 
+  int log_check = 0;
+  item *curr = list;
+
+  while(curr != NULL) {
+    if(list->cnt != 0) {
+      if(log_check == 0){
+        LOG_NONFREED_START(); 
+        log_check = 1;
+      }
+      LOG_BLOCK(list->ptr, list->size, list->cnt);   
+    }
+    curr = curr->next;
+  }
 
   LOG_STOP();
 
