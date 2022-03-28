@@ -37,18 +37,55 @@ void *malloc(size_t size)
     char *error;
     void *ptr;
    
-    if(!mallocp) {
-       mallocp = dlsym(RTLD_NEXT, "malloc");
-       if((error = dlerror()) != NULL) {     
-	  fputs(error, stderr);
-          exit(1);
-       }
-    }
-    ptr = mallocp(size);
-    n_malloc += 1;
-    n_allocb += size;
-    LOG_MALLOC(size, ptr);
-    return ptr;
+   if(!mallocp) {
+      mallocp = dlsym(RTLD_NEXT, "malloc");
+      if((error = dlerror()) != NULL) {     
+         fputs(error, stderr);
+         exit(1);
+      }
+   }
+   ptr = mallocp(size);
+   n_malloc += 1;
+   n_allocb += size;
+   LOG_MALLOC(size, ptr);
+   return ptr;
+}
+
+void *calloc(size_t nmemb, size_t size) 
+{
+   char* error;
+   void *ptr;
+   
+   if(!callocp) {
+      callocp = dlsym(RTLD_NEXT, "calloc");
+      if((error = dlerror()) != NULL) {
+         fputs(error, stderr);
+         exit(1);
+      }
+   }
+   ptr = callocp(nmemb, size);
+   n_calloc += 1;
+   n_allocb += nmemb * size;
+   LOG_CALLOC(nmemb, size, ptr);
+   return ptr;
+}
+
+void *realloc(void *ptr, size_t size) {
+    char *error;
+    void *new_ptr;
+
+   if(!reallocp) {  
+      reallocp = dlsym(RTLD_NEXT, "realloc");
+      if((error = dlerror()) != NULL) {
+         fputs(error, stderr);
+         exit(1);
+      } 
+   }
+   new_ptr = reallocp(ptr, size);
+   n_realloc += 1;
+   n_allocb += size;
+   LOG_REALLOC(ptr, size, new_ptr);
+   return new_ptr;
 }
 
 void free(void *ptr) {
@@ -65,43 +102,6 @@ void free(void *ptr) {
    freep(ptr);
 }
 
-void *calloc(size_t nmemb, size_t size) 
-{
-    char* error;
-    void *ptr;
-   
-    if(!callocp) {
-       callocp = dlsym(RTLD_NEXT, "calloc");
-       if((error = dlerror()) != NULL) {
-          fputs(error, stderr);
-          exit(1);
-	}
-    }
-    ptr = callocp(nmemb, size);
-    n_calloc += 1;
-    n_allocb += nmemb*size;
-    LOG_CALLOC(nmemb, size, ptr);
-    return ptr;
-}
-
-void *realloc(void *ptr, size_t size) {
-    char *error;
-    void *new_ptr;
-
-    if(!reallocp) {  
-      reallocp = dlsym(RTLD_NEXT, "realloc");
-      if((error = dlerror()) != NULL) {
-         fputs(error, stderr);
-         exit(1);
-      } 
-    }
-    new_ptr = reallocp(ptr, size);
-    n_realloc += 1;
-    n_allocb += size;
-    LOG_REALLOC(ptr, size, new_ptr);
-    return new_ptr;
-}
-
 //
 // init - this function is called once when the shared library is loaded
 //
@@ -110,11 +110,11 @@ void init(void)
 {
   char *error;
 
-  LOG_START();
+   LOG_START();
 
   // initialize a new list to keep track of all memory (de-)allocations
   // (not needed for part 1)
-  list = new_list();
+   list = new_list();
 
   // ...
 }
@@ -126,16 +126,16 @@ __attribute__((destructor))
 void fini(void)
 {
   // ...
-  static unsigned long avg = 0;
-  if((n_malloc + n_calloc + n_realloc) != 0) 
-    avg = n_allocb/(unsigned long)(n_malloc + n_calloc + n_realloc);
+   static unsigned long avg = 0;
+   if((n_malloc + n_calloc + n_realloc) != 0) 
+      avg = n_allocb/(unsigned long)(n_malloc + n_calloc + n_realloc);
 
-  LOG_STATISTICS(n_allocb, avg, n_freeb); 
+   LOG_STATISTICS(n_allocb, avg, n_freeb); 
 
-  LOG_STOP();
+   LOG_STOP();
 
   // free list (not needed for part 1)
-  free_list(list);
+   free_list(list);
 }
 
 // ...
