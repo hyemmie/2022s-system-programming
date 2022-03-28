@@ -158,16 +158,16 @@ void fini(void)
     avg = n_allocb/(unsigned long)(n_malloc + n_calloc + n_realloc);
 
   LOG_STATISTICS(n_allocb, avg, n_freeb); 
-  int log_check = 0;
+  int log_check = 1;
   item *curr = list;
 
   while(curr != NULL) {
-    if(list->cnt != 0) {
-      if(log_check == 0){
+    if(curr->cnt != 0) {
+      if(log_check) {
+        log_check = 0;
         LOG_NONFREED_START(); 
-        log_check = 1;
       }
-      LOG_BLOCK(list->ptr, list->size, list->cnt);   
+      LOG_BLOCK(curr->ptr, curr->size, curr->cnt);   
     }
     curr = curr->next;
   }
